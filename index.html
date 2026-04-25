@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DMARC Domain Filter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #151820;
+      --surface2: #1c2030;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.14);
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --accent: #4ade80;
+      --accent-dim: rgba(74,222,128,0.12);
+      --danger: #f87171;
+      --info: #60a5fa;
+      --info-dim: rgba(96,165,250,0.1);
+      --mono: 'DM Mono', monospace;
+      --display: 'Syne', sans-serif;
+    }
+
+    body {
+      font-family: var(--display);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem 5rem;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container { width: 100%; max-width: 640px; position: relative; z-index: 1; }
+
+    header { margin-bottom: 2.5rem; }
+
+    .pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(74,222,128,0.25);
+      border-radius: 99px;
+      padding: 4px 12px;
+      margin-bottom: 1rem;
+    }
+
+    h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; color: #fff; }
+    h1 span { color: var(--accent); }
+
+    .subtitle { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 0.75rem; line-height: 1.6; }
+
+    /* Tabs */
+    .tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 1rem; gap: 4px; }
+    .tab-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 9px 0; font-family: var(--display); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; transition: background 0.15s, color 0.15s; }
+    .tab-btn.active { background: var(--surface2); color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Drop zone */
+    #drop-zone { border: 1.5px dashed var(--border2); border-radius: 12px; padding: 2.5rem 2rem; text-align: center; cursor: pointer; transition: background 0.2s, border-color 0.2s; background: var(--surface); }
+    #drop-zone:hover, #drop-zone.drag-over { background: var(--info-dim); border-color: var(--info); }
+    #drop-zone svg { display: block; margin: 0 auto 0.9rem; color: var(--muted); }
+    #drop-zone .dz-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    #drop-zone .dz-sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    #file-input { display: none; }
+
+    /* Text input panel */
+    .text-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+    #domain-textarea { width: 100%; min-height: 160px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 0.75rem 1rem; font-family: var(--mono); font-size: 12px; color: var(--text); resize: vertical; outline: none; line-height: 1.9; }
+    #domain-textarea::placeholder { color: var(--muted); }
+    #domain-textarea:focus { border-color: var(--accent); }
+    #run-text-btn { margin-top: 10px; width: 100%; background: var(--accent); color: #0d0f14; border: none; border-radius: 8px; padding: 10px 0; font-family: var(--display); font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
+    #run-text-btn:hover { opacity: 0.85; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 1.25rem 0; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; }
+    .stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .stat-val { font-size: 26px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+    .stat-val.green { color: var(--accent); }
+    .stat-val.red { color: var(--danger); }
+
+    /* Progress */
+    #progress-wrap { display: none; margin-bottom: 1rem; }
+    #progress-bar-bg { height: 4px; background: var(--border2); border-radius: 99px; overflow: hidden; }
+    #progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 99px; transition: width 0.18s ease; }
+    #progress-label { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    /* Log — only allowed domains, plain names */
+    #log { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; max-height: 260px; overflow-y: auto; margin-bottom: 1.25rem; font-family: var(--mono); font-size: 12px; line-height: 2; color: var(--text); scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+
+    /* Buttons */
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    #dl-btn { display: none; background: var(--accent); color: #0d0f14; border: none; border-radius: 8px; padding: 10px 22px; font-family: var(--display); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+    #dl-btn:hover { opacity: 0.85; }
+
+    #copy-btn { display: none; background: transparent; color: var(--info); border: 1px solid rgba(96,165,250,0.35); border-radius: 8px; padding: 10px 20px; font-family: var(--display); font-size: 14px; cursor: pointer; transition: background 0.15s; }
+    #copy-btn:hover { background: var(--info-dim); }
+
+    #reset-btn { display: none; background: transparent; color: var(--muted); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 20px; font-family: var(--display); font-size: 14px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    #reset-btn:hover { background: var(--surface2); color: var(--text); }
+
+    .notice { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 1.25rem; line-height: 1.8; border-top: 1px solid var(--border); padding-top: 1rem; }
+    .notice code { background: var(--surface2); padding: 1px 5px; border-radius: 4px; color: var(--info); }
+
+    footer { margin-top: 3rem; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="pill">DNS · DMARC · Filter</div>
+    <h1>Domain <span>Filter</span></h1>
+    <p class="subtitle">Filters out p=reject domains. Keeps none, quarantine, no DMARC.<br>Runs 100% in your browser — no server, no data sent anywhere.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('file')">Upload File</button>
+    <button class="tab-btn" onclick="switchTab('text')">Paste Domains</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-file">
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4M8 8l4-4 4 4"/>
+      </svg>
+      <div class="dz-title">Click to upload or drag & drop</div>
+      <div class="dz-sub">plain .txt — one domain per line</div>
+    </div>
+    <input type="file" id="file-input" accept=".txt,text/plain">
+  </div>
+
+  <div class="tab-panel" id="tab-text">
+    <div class="text-panel">
+      <textarea id="domain-textarea" placeholder="Paste domains here, one per line:&#10;&#10;example.com&#10;google.com&#10;apple.com"></textarea>
+      <button id="run-text-btn" onclick="runFromText()">Run Filter</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="s-total">—</div></div>
+    <div class="stat"><div class="stat-label">Allowed</div><div class="stat-val green" id="s-allowed">—</div></div>
+    <div class="stat"><div class="stat-label">Rejected</div><div class="stat-val red" id="s-rejected">—</div></div>
+  </div>
+
+  <div id="progress-wrap">
+    <div id="progress-bar-bg"><div id="progress-bar"></div></div>
+    <div id="progress-label">Checking 0 / 0...</div>
+  </div>
+
+  <div id="log"></div>
+
+  <div class="actions">
+    <button id="dl-btn" onclick="downloadResult()">↓ Download clean_domains.txt</button>
+    <button id="copy-btn" onclick="copyResult()">Copy to clipboard</button>
+    <button id="reset-btn" onclick="resetApp()">Start over</button>
+  </div>
+
+  <div class="notice">
+    DNS lookups use <code>dns.google</code> + <code>cloudflare-dns.com</code> (DNS-over-HTTPS).<br>
+    Keeps: <code>p=none</code>, <code>p=quarantine</code>, no DMARC record.<br>
+    Filters out: <code>p=reject</code> only.
+  </div>
+</div>
+
+<footer>built with dns-over-https · runs 100% client-side</footer>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const logEl = document.getElementById('log');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressBar = document.getElementById('progress-bar');
+  const progressLabel = document.getElementById('progress-label');
+  const dlBtn = document.getElementById('dl-btn');
+  const copyBtn = document.getElementById('copy-btn');
+  const resetBtn = document.getElementById('reset-btn');
+
+  let allowedDomains = [];
+  let totalDomains = 0;
+  let rejectedCount = 0;
+  let checkedCount = 0;
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (tab === 'file') ? i === 0 : i === 1));
+    document.getElementById('tab-file').classList.toggle('active', tab === 'file');
+    document.getElementById('tab-text').classList.toggle('active', tab === 'text');
+  }
+
+  function runFromText() {
+    const raw = document.getElementById('domain-textarea').value;
+    const domains = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!domains.length) { alert('No domains found. Please paste at least one domain.'); return; }
+    startProcessing(domains);
+  }
+
+  const RESOLVERS = [
+    { url: 'https://dns.google/resolve', headers: {} },
+    { url: 'https://cloudflare-dns.com/dns-query', headers: { 'Accept': 'application/dns-json' } }
+  ];
+
+  function parseDmarcPolicy(answers) {
+    if (!answers) return 'none';
+    for (const ans of answers) {
+      const raw = (ans.data || '').replace(/"/g, '').replace(/\s+/g, ' ').trim();
+      if (/v=dmarc1/i.test(raw)) {
+        for (const tag of raw.split(';').map(t => t.trim())) {
+          const eq = tag.indexOf('=');
+          if (eq === -1) continue;
+          const key = tag.slice(0, eq).trim().toLowerCase();
+          const val = tag.slice(eq + 1).trim().toLowerCase();
+          if (key === 'p' && val) return val;
+        }
+      }
+    }
+    return 'none';
+  }
+
+  async function fetchOnce(domain, resolver) {
+    const res = await fetch(
+      `${resolver.url}?name=_dmarc.${encodeURIComponent(domain)}&type=TXT`,
+      { headers: resolver.headers }
+    );
+    const json = await res.json();
+    return parseDmarcPolicy(json.Answer);
+  }
+
+  async function getDmarcPolicy(domain) {
+    const timeout = new Promise((_, rej) => setTimeout(() => rej('timeout'), 5000));
+    try {
+      return await Promise.race([fetchOnce(domain, RESOLVERS[0]), timeout]);
+    } catch {
+      try { return await fetchOnce(domain, RESOLVERS[1]); }
+      catch { return 'none'; }
+    }
+  }
+
+  // Log buffer — only queues allowed domains, plain name only
+  let logBuffer = [];
+  let logFlushTimer = null;
+
+  function flushLog() {
+    if (!logBuffer.length) return;
+    const frag = document.createDocumentFragment();
+    for (const domain of logBuffer) {
+      const line = document.createElement('div');
+      line.textContent = domain;
+      frag.appendChild(line);
+    }
+    logEl.appendChild(frag);
+    logEl.scrollTop = logEl.scrollHeight;
+    logBuffer = [];
+    logFlushTimer = null;
+  }
+
+  function queueLog(domain) {
+    logBuffer.push(domain);
+    if (!logFlushTimer) logFlushTimer = setTimeout(flushLog, 150);
+  }
+
+  let lastUIUpdate = 0;
+  function maybeUpdateUI() {
+    const now = Date.now();
+    if (now - lastUIUpdate < 33) return;
+    lastUIUpdate = now;
+    const pct = Math.round((checkedCount / totalDomains) * 100);
+    progressBar.style.width = pct + '%';
+    progressLabel.textContent = `Checking ${checkedCount} / ${totalDomains}... (${pct}%)`;
+    document.getElementById('s-allowed').textContent = allowedDomains.length;
+    document.getElementById('s-rejected').textContent = rejectedCount;
+  }
+
+  async function startProcessing(domains) {
+    totalDomains = domains.length;
+    allowedDomains = [];
+    rejectedCount = 0;
+    checkedCount = 0;
+    logBuffer = [];
+    lastUIUpdate = 0;
+    if (logFlushTimer) { clearTimeout(logFlushTimer); logFlushTimer = null; }
+
+    document.getElementById('s-total').textContent = totalDomains;
+    document.getElementById('s-allowed').textContent = '...';
+    document.getElementById('s-rejected').textContent = '...';
+    progressWrap.style.display = 'block';
+    logEl.style.display = 'block';
+    logEl.innerHTML = '';
+    dlBtn.style.display = 'none';
+    copyBtn.style.display = 'none';
+    resetBtn.style.display = 'none';
+
+    const CONCURRENCY = 60;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < domains.length) {
+        const domain = domains[idx++];
+        const policy = await getDmarcPolicy(domain);
+        checkedCount++;
+        if (policy === 'reject') {
+          rejectedCount++;
+          // silently counted — not shown in log
+        } else {
+          allowedDomains.push(domain);
+          queueLog(domain);
+        }
+        maybeUpdateUI();
+      }
+    }
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+    flushLog();
+    progressBar.style.width = '100%';
+    progressLabel.textContent = `Done — ${allowedDomains.length} allowed, ${rejectedCount} rejected.`;
+    document.getElementById('s-allowed').textContent = allowedDomains.length;
+    document.getElementById('s-rejected').textContent = rejectedCount;
+    dlBtn.style.display = 'inline-block';
+    copyBtn.style.display = 'inline-block';
+    resetBtn.style.display = 'inline-block';
+  }
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  function handleFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const domains = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!domains.length) { alert('No domains found in file.'); return; }
+      startProcessing(domains);
+    };
+    reader.readAsText(file);
+  }
+
+  function downloadResult() {
+    const blob = new Blob([allowedDomains.join('\n')], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'clean_domains.txt';
+    a.click();
+  }
+
+  function copyResult() {
+    navigator.clipboard.writeText(allowedDomains.join('\n')).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 2000);
+    });
+  }
+
+  function resetApp() {
+    allowedDomains = [];
+    totalDomains = rejectedCount = checkedCount = 0;
+    logBuffer = [];
+    if (logFlushTimer) { clearTimeout(logFlushTimer); logFlushTimer = null; }
+    logEl.innerHTML = '';
+    logEl.style.display = 'none';
+    progressWrap.style.display = 'none';
+    progressBar.style.width = '0%';
+    dlBtn.style.display = 'none';
+    copyBtn.style.display = 'none';
+    resetBtn.style.display = 'none';
+    ['s-total', 's-allowed', 's-rejected'].forEach(id => document.getElementById(id).textContent = '—');
+    fileInput.value = '';
+    document.getElementById('domain-textarea').value = '';
+  }
+</script>
+</body>
+</html>
